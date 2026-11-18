@@ -1,0 +1,56 @@
+PRYFORMA · TRAINING & PERFORMANCE
+Entregable de identidad visual · Versión 1.0 · Noviembre de 2026
+Eslogan: «Construye tu mejor versión»
+
+CONTENIDO
+---------
+01-Icono-app/            Ícono para tiendas y dispositivos.
+                         pryforma-icono-app.svg · pryforma-icono-app-1024.png
+02-Simbolo/              Símbolo «Progresión» a color, fondo transparente.
+                         pryforma-simbolo.svg · pryforma-simbolo.png
+03-Logotipo-horizontal/  Versión principal de la marca.
+                         pryforma-logotipo-horizontal.svg · .png
+04-Logotipo-vertical/    Para formatos cuadrados o estrechos.
+                         pryforma-logotipo-vertical.svg · .png
+05-Monocromatico/        Una sola tinta.
+                         pryforma-logotipo-blanco.svg  (fondos oscuros y fotografías)
+                         pryforma-logotipo-tinta.svg   (sellos, grabado, impresión a una tinta)
+06-Favicon/              favicon.svg · favicon.ico (16, 32 y 48 px) · apple-touch-icon.png (180 px)
+PRYFORMA-hoja-de-marca   Resumen de la identidad en una página (.pdf, .png, .svg).
+PRYFORMA-manual-de-identidad.pdf   Manual completo (12 páginas).
+
+QUÉ ARCHIVO USAR
+----------------
+SVG  Web, app, presentaciones e imprenta. Vectorial: escala sin perder calidad.
+     Los textos están convertidos a trazos; no hace falta instalar fuentes.
+PNG  Documentos de oficina, correo y redes sociales. Fondo transparente.
+ICO  Ícono de la pestaña del navegador.
+
+COLORES
+-------
+Cobalto  #1E4FD8  RGB 30 79 216    CMYK 86 63 0 15 (aprox.)   Color principal
+Marino   #0B2A6F  RGB 11 42 111    CMYK 90 62 0 56 (aprox.)   Fondos de marca
+Cielo    #2F8CEB  RGB 47 140 235   CMYK 80 40 0 8  (aprox.)   Acento
+Tinta    #0A1A3F  RGB 10 26 63     CMYK 84 59 0 75 (aprox.)   Texto y nombre
+Hielo    #E6EEFF  RGB 230 238 255                             Fondos suaves
+Niebla   #F4F7FC  RGB 244 247 252                             Fondo general
+Los valores CMYK son aproximados; validar con la imprenta.
+
+TIPOGRAFÍA
+----------
+Space Grotesk (Bold, SemiBold)   Nombre de marca y títulos.
+Inter (Regular, SemiBold, Bold)  Texto e interfaz.
+Ambas son de uso libre (SIL Open Font License) y están en Google Fonts.
+
+REGLAS BÁSICAS
+--------------
+- Área de respeto: 2 X alrededor del logo (X = ancho de una barra).
+- Tamaño mínimo: horizontal 120 px / 30 mm · símbolo 16 px / 5 mm.
+- PRYFORMA se escribe siempre en mayúsculas y en una sola palabra.
+- No deformar, rotar, recolorear, invertir las barras ni añadir efectos.
+- Sobre fotografías o fondos oscuros, usar la versión en blanco.
+
+PENDIENTE
+---------
+Verificar con el área jurídica la disponibilidad del nombre y del símbolo
+antes de registrar la marca.

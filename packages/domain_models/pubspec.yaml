@@ -1,0 +1,17 @@
+name: domain_models
+description: Shared domain entities for the Fitness Platform.
+publish_to: none
+
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  freezed_annotation: ^3.0.0
+  json_annotation: ^4.9.0
+
+dev_dependencies:
+  freezed: ^4.0.0
+  json_serializable: ^6.8.0
+  build_runner: ^2.4.0

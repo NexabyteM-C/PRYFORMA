@@ -1,0 +1,35 @@
+{
+    "name": "PRYFORMA · Training & Performance",
+    "short_name": "PRYFORMA",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0B2A6F",
+    "theme_color": "#1E4FD8",
+    "description": "PRYFORMA — construye tu mejor versión. Entrenamiento, clases y progreso.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

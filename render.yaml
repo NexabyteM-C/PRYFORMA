@@ -1,0 +1,21 @@
+# Render blueprint — PRYFORMA test stage (Flutter Web static site).
+# Connect this repo in Render → "New +" → "Blueprint", and it provisions the
+# static site below. SUPABASE_* default to the dev project; override them in the
+# Render dashboard to point the test build at another Supabase.
+services:
+  - type: web
+    name: pryforma-test
+    runtime: static
+    buildCommand: bash render-build.sh
+    staticPublishPath: apps/fitness_app/build/web
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: SUPABASE_URL
+        value: https://sxrnykzboumtpqcokkxf.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4cm55a3pib3VtdHBxY29ra3hmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQyMzA2ODksImV4cCI6MjEwOTgwNjY4OX0.xbgEr-YEnfeLq5AgJLgjohyTk1xWsnbC0igmxtGR9go
+    # SPA fallback: every route serves index.html so go_router handles it.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

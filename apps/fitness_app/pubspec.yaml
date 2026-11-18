@@ -1,0 +1,67 @@
+name: fitness_app
+description: Plataforma Fitness & Cross-Training
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.2
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Workspace packages
+  design_system:
+    path: ../../packages/design_system
+  domain_models:
+    path: ../../packages/domain_models
+
+  # State management
+  flutter_riverpod: ^2.6.0
+
+  # Navigation
+  go_router: ^14.8.0
+
+  # Networking / Backend
+  supabase_flutter: ^2.8.0
+  http: ^1.2.0
+
+  # Local storage
+  flutter_secure_storage: ^9.2.0
+  drift: ^2.22.0
+  sqlite3_flutter_libs: ^0.5.0
+
+  # Models (runtime)
+  freezed_annotation: ^3.0.0
+  json_annotation: ^4.9.0
+
+  # Charts
+  fl_chart: ^0.69.0
+
+  # Internationalization
+  intl: ^0.20.2
+
+  # Google Fonts
+  google_fonts: ^6.2.0
+
+  # Keep the screen awake during the class timer
+  wakelock_plus: ^1.2.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code generation
+  build_runner: ^2.4.0
+  freezed: ^4.0.0
+  json_serializable: ^6.8.0
+  drift_dev: ^2.22.0
+
+flutter:
+  uses-material-design: true
+

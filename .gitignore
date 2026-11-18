@@ -1,0 +1,48 @@
+# Dart/Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env
+.env.local
+.env.*.local
+**/ephemeral/
+
+# Generated code (freezed/json_serializable) is COMMITTED so CI/Render can
+# build without running build_runner. Mocks stay ignored.
+*.mocks.dart
+
+# Coverage
+coverage/
+lcov.info
+
+# Build artifacts
+apps/fitness_app/android/app/debug/
+apps/fitness_app/android/app/profile/
+apps/fitness_app/android/app/release/
+apps/fitness_app/ios/Pods/
+apps/fitness_app/ios/Flutter/Flutter.framework
+apps/fitness_app/ios/Flutter/Flutter.podspec
+
+# Server
+server/.dart_tool/
+
+# Pub
+.pub-cache/
+pubspec.lock
+!server/pubspec.lock

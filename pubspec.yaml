@@ -1,0 +1,10 @@
+name: fitness_platform
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+workspace:
+  - packages/design_system
+  - packages/domain_models
+  - apps/fitness_app
