@@ -41,7 +41,7 @@ class AthleteHomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(nextClassProvider);
+            ref.invalidate(upcomingClassesProvider);
             ref.invalidate(goalListProvider);
             ref.invalidate(latestAnnouncementProvider);
             ref.invalidate(athleteMembershipProvider);
@@ -288,16 +288,163 @@ class _NextClassSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(nextClassProvider);
+    final async = ref.watch(upcomingClassesProvider);
     return async.when(
       loading: () => const _CardSkeleton(height: 200),
       error: (_, _) => const _EmptyClassCard(
-        message: 'No pudimos cargar tu próxima clase.',
+        message: 'No pudimos cargar tus clases.',
       ),
-      data: (row) {
-        if (row == null) return const _EmptyClassCard();
-        return _NextClassCard(row: row);
+      data: (rows) {
+        if (rows.isEmpty) return const _EmptyClassCard();
+        final others = rows.skip(1).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // The soonest class keeps the prominent card (with Ver clase + Iniciar).
+            _NextClassCard(row: rows.first),
+            if (others.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Icon(Icons.event_note_rounded,
+                      size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Otras clases disponibles',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              for (final r in others) ...[
+                _OtherClassCard(row: r),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ],
+        );
       },
+    );
+  }
+}
+
+/// Compact card for an additional upcoming class on the home screen. Tapping it
+/// (or "Ver clase") opens the class detail where the athlete can enroll.
+class _OtherClassCard extends StatelessWidget {
+  const _OtherClassCard({required this.row});
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final program = (row['program'] as Map?)?.cast<String, dynamic>() ?? {};
+    final org = (program['organization'] as Map?)?.cast<String, dynamic>() ?? {};
+    final sessionId = row['id'] as String;
+    final boxName = org['name'] as String? ?? 'Mi box';
+    final title = program['title'] as String? ?? 'Clase';
+    final start = DateTime.tryParse(row['start_time'] as String? ?? '')?.toLocal();
+    final time = formatSessionTime(row['start_time'] as String?);
+
+    String whenLabel;
+    try {
+      final now = DateTime.now();
+      final isToday = start != null &&
+          start.year == now.year &&
+          start.month == now.month &&
+          start.day == now.day;
+      if (start == null) {
+        whenLabel = '';
+      } else if (isToday) {
+        whenLabel = 'Hoy${time.isNotEmpty ? ' · $time' : ''}';
+      } else {
+        whenLabel =
+            '${capitalize(DateFormat('EEE', 'es').format(start))}${time.isNotEmpty ? ' · $time' : ''}';
+      }
+    } catch (_) {
+      whenLabel = time;
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => context.push('/athlete/classes/$sessionId'),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(Icons.fitness_center_rounded,
+                  size: 20, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [if (whenLabel.isNotEmpty) whenLabel, boxName].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Ver clase',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18, color: AppColors.primary),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,10 +4,13 @@ import '../../../announcements/data/datasources/announcement_remote_datasource.d
 import '../../../classes/presentation/providers/class_provider.dart';
 import '../../../organizations/presentation/providers/membership_provider.dart';
 
-/// The athlete's next upcoming published class (today .. +7d), or null.
-/// Rows are the rich calendar maps (session + program + organization + ...).
-final nextClassProvider =
-    FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
+/// All of the athlete's upcoming enrollable classes (today .. +7d), one entry
+/// per distinct program — its soonest upcoming session, so a program with
+/// several time slots still shows a single card (the athlete picks the slot in
+/// "Ver clase"). Sorted by start time. Rows are the rich calendar maps
+/// (session + program + organization + ...).
+final upcomingClassesProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final ds = ref.watch(classRemoteDatasourceProvider);
   final now = DateTime.now();
   final start = DateTime(now.year, now.month, now.day);
@@ -22,7 +25,26 @@ final nextClassProvider =
   }).toList()
     ..sort((a, b) =>
         (a['start_time'] as String).compareTo(b['start_time'] as String));
-  return upcoming.isEmpty ? null : upcoming.first;
+
+  // Keep only the soonest session of each distinct program (otherwise every
+  // time slot of the same class would appear as its own card).
+  final seenPrograms = <String>{};
+  final out = <Map<String, dynamic>>[];
+  for (final r in upcoming) {
+    final pid = (r['program'] as Map?)?['id'] as String? ??
+        r['program_id'] as String? ??
+        r['id'] as String;
+    if (seenPrograms.add(pid)) out.add(r);
+  }
+  return out;
+});
+
+/// The athlete's next upcoming published class (today .. +7d), or null.
+/// Kept for callers that only need the single next class.
+final nextClassProvider =
+    FutureProvider.autoDispose<Map<String, dynamic>?>((ref) async {
+  final list = await ref.watch(upcomingClassesProvider.future);
+  return list.isEmpty ? null : list.first;
 });
 
 /// The most recent published announcement across the athlete's boxes.
