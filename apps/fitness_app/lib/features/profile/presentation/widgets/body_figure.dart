@@ -112,8 +112,9 @@ class BodyFigureInput extends StatelessWidget {
   /// Current in-progress values by measure key (null = not entered).
   final Map<String, double?> values;
 
-  /// Called with the measure key when a pin is tapped.
-  final ValueChanged<String> onTap;
+  /// Called with the measure key when a pin is tapped. When null the figure is
+  /// read-only (used to display the latest recorded measurements).
+  final ValueChanged<String>? onTap;
 
   final double height;
 
@@ -143,7 +144,7 @@ class BodyFigureInput extends StatelessWidget {
                     label: pin.shortLabel,
                     value: values[pin.key],
                     maxWidth: pin.key == 'weight_kg' ? 120 : chipMaxWidth,
-                    onTap: () => onTap(pin.key),
+                    onTap: onTap == null ? null : () => onTap!(pin.key),
                   ),
                 ),
             ],
@@ -164,7 +165,7 @@ class _PinChip extends StatelessWidget {
   });
   final String label;
   final double? value;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final double maxWidth;
 
   @override

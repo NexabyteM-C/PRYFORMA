@@ -268,14 +268,22 @@ class ProgrammingRemoteDatasource {
   /// WITHOUT disturbing sessions that already match a slot. Existing sessions
   /// keep their id (so athlete links and enrollments survive a re-publish);
   /// only missing slots are added and sessions with no matching slot removed.
+  ///
+  /// When [onlyStartMinutes] is provided, the program is synced to just those
+  /// slot start minutes (a "personalizada" program on specific franjas);
+  /// passing null keeps the default of every active slot.
   Future<void> syncSessionsFromSlots({
     required String orgId,
     required String programId,
     required DateTime date,
     String? fallbackLocationId,
+    Set<int>? onlyStartMinutes,
   }) async {
     final slots = (await listTimeSlots(orgId))
         .where((s) => s['is_active'] != false)
+        .where((s) =>
+            onlyStartMinutes == null ||
+            onlyStartMinutes.contains((s['start_minutes'] as num?)?.toInt()))
         .toList();
     final existing = await sessionsForProgram(programId);
 

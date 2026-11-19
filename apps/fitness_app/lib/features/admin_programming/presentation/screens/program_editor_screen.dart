@@ -59,8 +59,47 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
   bool _loading = false;
   bool _saving = false;
 
-  /// Bumped to force the configured-slots panel to refetch after changes.
-  int _sessionsVersion = 0;
+  // ── Time-slot selection ("¿a qué franjas aplica esta programación?") ──
+  // The box's active slots and the subset this program applies to. All slots
+  // are selected by default; unchecking some marks the program "personalizada".
+  List<Map<String, dynamic>> _availableSlots = const [];
+  final Set<int> _selectedSlotStarts = {}; // chosen slot start_minutes
+  bool _slotsLoaded = false;
+
+  int _slotStart(Map<String, dynamic> s) =>
+      (s['start_minutes'] as num?)?.toInt() ?? 0;
+
+  /// Loads the box's active slots. For a new program every slot starts checked;
+  /// for an existing one the checked set mirrors the sessions it already has.
+  Future<void> _loadSlots({Set<int>? preset}) async {
+    final org = ref.read(resolvedAdminOrgProvider);
+    if (org == null) return;
+    try {
+      final ds = ref.read(programmingDatasourceProvider);
+      final slots = (await ds.listTimeSlots(org.id))
+          .where((s) => s['is_active'] != false)
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _availableSlots = slots;
+        _selectedSlotStarts.clear();
+        if (preset != null) {
+          _selectedSlotStarts.addAll(preset);
+        } else {
+          // Default: applies to every configured slot.
+          _selectedSlotStarts.addAll(slots.map(_slotStart));
+        }
+        _slotsLoaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _slotsLoaded = true);
+    }
+  }
+
+  /// Whether the program applies to all active slots (vs a custom subset).
+  bool get _appliesToAll =>
+      _availableSlots.isNotEmpty &&
+      _availableSlots.every((s) => _selectedSlotStarts.contains(_slotStart(s)));
 
   @override
   void initState() {
@@ -70,6 +109,8 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
       _loading = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _load());
     } else {
+      // New program: load the box slots so all are pre-checked by default.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadSlots());
       // Default class structure for a brand-new program (fully editable).
       _blocks.addAll([
         BlockDraft(
@@ -174,6 +215,16 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
       _existingSessionIds
         ..clear()
         ..addAll(sessionRows.map((e) => e['id'] as String));
+
+      // Pre-check the slots this program already occupies (its session times).
+      final sessionStarts = <int>{
+        for (final e in sessionRows)
+          () {
+            final st = DateTime.parse(e['start_time'] as String).toLocal();
+            return st.hour * 60 + st.minute;
+          }(),
+      };
+      await _loadSlots(preset: sessionStarts);
     } catch (e) {
       if (mounted) _snack('No se pudo cargar: $e', isError: true);
     } finally {
@@ -183,42 +234,6 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() {});
       });
-    }
-  }
-
-  /// Re-reads this program's sessions from the server and rebuilds the
-  /// free-form draft list so it stays in sync after slot toggles / saves.
-  Future<void> _reloadSessions() async {
-    if (_programId == null) return;
-    final ds = ref.read(programmingDatasourceProvider);
-    try {
-      final rows = await ds.sessionsForProgram(_programId!);
-      final sorted = [...rows]..sort(
-        (a, b) => ((a['start_time'] as String?) ?? '').compareTo(
-          (b['start_time'] as String?) ?? '',
-        ),
-      );
-      _sessions
-        ..clear()
-        ..addAll(
-          sorted.map((e) {
-            final start = DateTime.parse(e['start_time'] as String).toLocal();
-            return _SessionDraft(
-              id: e['id'] as String?,
-              time: TimeOfDay(hour: start.hour, minute: start.minute),
-              capacity: (e['capacity'] as num?)?.toInt() ?? 15,
-              locationId: e['location_id'] as String?,
-            );
-          }),
-        );
-      _existingSessionIds
-        ..clear()
-        ..addAll(sorted.map((e) => e['id'] as String));
-      if (mounted) setState(() => _sessionsVersion++);
-    } catch (e) {
-      if (mounted) {
-        _snack('No se pudieron recargar las sesiones: $e', isError: true);
-      }
     }
   }
 
@@ -250,6 +265,13 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
     if (publish && _scheduledAt == null && !_immediateSelected) {
       // _scheduledAt null + not immediate => scheduler not completed
       _snack('Completa la fecha y hora de publicación', isError: true);
+      return;
+    }
+    if (_slotsLoaded &&
+        _availableSlots.isNotEmpty &&
+        _selectedSlotStarts.isEmpty) {
+      _snack('Selecciona al menos una franja horaria para la clase',
+          isError: true);
       return;
     }
 
@@ -343,13 +365,17 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
       // (which preserves existing session ids) at the same time.
       await Future.wait([
         ...exerciseInserts,
-        // Sessions are derived automatically from the box's configured
-        // schedule: one class_session per active time slot on this date.
+        // One class_session per SELECTED box time slot on this date. By default
+        // every slot is selected; a "personalizada" program syncs only to the
+        // franjas the coach kept checked.
         ds.syncSessionsFromSlots(
           orgId: org!.id,
           programId: _programId!,
           date: _programDate,
           fallbackLocationId: _locationId,
+          onlyStartMinutes: (_slotsLoaded && _availableSlots.isNotEmpty)
+              ? _selectedSlotStarts.toSet()
+              : null,
         ),
       ]);
 
@@ -620,6 +646,8 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
           ),
         ),
         const SizedBox(height: 24),
+        _buildSlotSelector(),
+        const SizedBox(height: 24),
         Text(
           'Bloques',
           style: GoogleFonts.spaceGrotesk(
@@ -670,6 +698,218 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
           label: const Text('Agregar bloque'),
         ),
       ],
+    );
+  }
+
+  /// Lets the coach pick which configured box slots this program applies to.
+  /// All slots are checked by default ("Todas las franjas"); unchecking any
+  /// marks it "Personalizada" so a second program can take a single slot.
+  Widget _buildSlotSelector() {
+    final custom = _slotsLoaded && _availableSlots.isNotEmpty && !_appliesToAll;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: custom ? AppColors.secondaryAccent : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule_rounded, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Horarios de esta programación',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (_slotsLoaded && _availableSlots.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (custom
+                            ? AppColors.secondaryAccent
+                            : AppColors.primary)
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        custom
+                            ? Icons.tune_rounded
+                            : Icons.done_all_rounded,
+                        size: 13,
+                        color: custom
+                            ? AppColors.secondaryAccent
+                            : AppColors.primary,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        custom ? 'Personalizada' : 'Todas las franjas',
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: custom
+                              ? AppColors.secondaryAccent
+                              : AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Por defecto aplica a todas las franjas del box. Desmarca las que '
+            'no quieras para dejarla en horarios específicos.',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          if (!_slotsLoaded)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else if (_availableSlots.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warningBackground,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'El box no tiene franjas horarias configuradas. Agrégalas en '
+                'Configuración para asignar esta clase a un horario.',
+                style: TextStyle(fontSize: 12, color: AppColors.warningText),
+              ),
+            )
+          else ...[
+            Row(
+              children: [
+                _slotQuickAction('Todas', Icons.done_all_rounded, () {
+                  setState(() {
+                    _selectedSlotStarts
+                      ..clear()
+                      ..addAll(_availableSlots.map(_slotStart));
+                  });
+                }),
+                const SizedBox(width: 8),
+                _slotQuickAction('Ninguna', Icons.remove_done_rounded, () {
+                  setState(_selectedSlotStarts.clear);
+                }),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final slot in _availableSlots)
+                  _slotChip(slot),
+              ],
+            ),
+            if (_selectedSlotStarts.isEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Selecciona al menos una franja para que la clase aparezca a '
+                'los atletas.',
+                style: TextStyle(fontSize: 11.5, color: AppColors.error),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _slotQuickAction(String label, IconData icon, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: AppColors.primary),
+            const SizedBox(width: 4),
+            Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _slotChip(Map<String, dynamic> slot) {
+    final start = _slotStart(slot);
+    final end = (slot['end_minutes'] as num?)?.toInt() ?? start;
+    final label = (slot['label'] as String?) ?? slotLabel(start, end);
+    final selected = _selectedSlotStarts.contains(start);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => setState(() {
+        if (selected) {
+          _selectedSlotStarts.remove(start);
+        } else {
+          _selectedSlotStarts.add(start);
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primaryLight : AppColors.inputBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              selected
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              size: 18,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color:
+                    selected ? AppColors.primaryDark : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -777,282 +1017,6 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
   }
 }
 
-/// Lets the coach assign this program to the box's configured time slots.
-/// Toggling a slot creates / deletes a real class_session immediately.
-class _SlotSessionsPanel extends ConsumerStatefulWidget {
-  const _SlotSessionsPanel({
-    super.key,
-    required this.orgId,
-    required this.programId,
-    required this.programDate,
-    required this.fallbackLocationId,
-    required this.onChanged,
-  });
-
-  final String? orgId;
-  final String? programId;
-  final DateTime programDate;
-  final String? fallbackLocationId;
-  final VoidCallback onChanged;
-
-  @override
-  ConsumerState<_SlotSessionsPanel> createState() => _SlotSessionsPanelState();
-}
-
-class _SlotSessionsPanelState extends ConsumerState<_SlotSessionsPanel> {
-  bool _loading = true;
-  String? _error;
-  List<Map<String, dynamic>> _slots = const [];
-
-  /// start_minutes -> session id for slots currently active on this program.
-  final Map<int, String> _sessionByStart = {};
-  final Set<String> _busy = {};
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.orgId == null || widget.programId == null) {
-      _loading = false;
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fetch());
-    }
-  }
-
-  Future<void> _fetch() async {
-    if (widget.orgId == null || widget.programId == null) {
-      if (mounted) setState(() => _loading = false);
-      return;
-    }
-    final ds = ref.read(programmingDatasourceProvider);
-    try {
-      final slots = await ds.listTimeSlots(widget.orgId!);
-      final sessions = await ds.sessionsForProgram(widget.programId!);
-      _sessionByStart.clear();
-      for (final s in sessions) {
-        final start = DateTime.parse(s['start_time'] as String).toLocal();
-        _sessionByStart[start.hour * 60 + start.minute] = s['id'] as String;
-      }
-      if (mounted) {
-        setState(() {
-          _slots = slots
-              .where((s) => (s['is_active'] as bool?) ?? true)
-              .toList();
-          _loading = false;
-          _error = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = '$e';
-        });
-      }
-    }
-  }
-
-  Future<void> _toggle(Map<String, dynamic> slot) async {
-    final slotId = slot['id'] as String;
-    final startMinutes = (slot['start_minutes'] as num?)?.toInt() ?? 0;
-    final endMinutes = (slot['end_minutes'] as num?)?.toInt() ?? startMinutes;
-    final existing = _sessionByStart[startMinutes];
-    final ds = ref.read(programmingDatasourceProvider);
-
-    setState(() => _busy.add(slotId));
-    try {
-      if (existing != null) {
-        await ds.deleteSession(existing);
-      } else {
-        final base = DateTime(
-          widget.programDate.year,
-          widget.programDate.month,
-          widget.programDate.day,
-        );
-        final start = base.add(Duration(minutes: startMinutes));
-        final end = base.add(Duration(minutes: endMinutes));
-        await ds.addSession({
-          'program_id': widget.programId,
-          'location_id': slot['location_id'] ?? widget.fallbackLocationId,
-          'start_time': start.toIso8601String(),
-          'end_time': end.toIso8601String(),
-          'capacity': (slot['capacity'] as num?)?.toInt() ?? 15,
-        });
-      }
-      await _fetch();
-      widget.onChanged();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo actualizar la sesión: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy.remove(slotId));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final header = Text(
-      'DESDE HORARIOS CONFIGURADOS',
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.4,
-        color: AppColors.textSecondary,
-      ),
-    );
-
-    if (widget.programId == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          header,
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.warningBackground,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              'Guarda la programación para asignarla a los horarios '
-              'configurados del box.',
-              style: TextStyle(fontSize: 12, color: AppColors.warningText),
-            ),
-          ),
-        ],
-      );
-    }
-
-    if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
-    if (_error != null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          header,
-          const SizedBox(height: 8),
-          Text(
-            'No se pudieron cargar los horarios.\n$_error',
-            style: TextStyle(fontSize: 12, color: AppColors.error),
-          ),
-        ],
-      );
-    }
-
-    if (_slots.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          header,
-          const SizedBox(height: 8),
-          Text(
-            'El box no tiene horarios configurados. Agrégalos en '
-            'Configuración.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        header,
-        const SizedBox(height: 8),
-        ..._slots.map((slot) {
-          final slotId = slot['id'] as String;
-          final start = (slot['start_minutes'] as num?)?.toInt() ?? 0;
-          final end = (slot['end_minutes'] as num?)?.toInt() ?? start;
-          final active = _sessionByStart.containsKey(start);
-          final busy = _busy.contains(slotId);
-          final label = (slot['label'] as String?) ?? slotLabel(start, end);
-          final capacity = (slot['capacity'] as num?)?.toInt() ?? 0;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: active ? AppColors.primary : AppColors.border,
-              ),
-              color: active ? AppColors.primaryLight : AppColors.inputBackground,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.schedule_rounded,
-                  size: 16,
-                  color: active ? AppColors.primary : AppColors.textSecondary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: active
-                              ? AppColors.primaryDark
-                              : AppColors.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        'Cupo: $capacity',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (busy)
-                  const SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: Center(
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  )
-                else
-                  Checkbox(
-                    value: active,
-                    activeColor: AppColors.primary,
-                    onChanged: (_) => _toggle(slot),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
 class _DateField extends StatelessWidget {
   const _DateField({required this.date, required this.onTap});
   final DateTime date;
@@ -1139,103 +1103,3 @@ class _FocusTagsField extends StatelessWidget {
   }
 }
 
-class _SessionTile extends StatelessWidget {
-  const _SessionTile({
-    required this.draft,
-    required this.locations,
-    required this.onPickTime,
-    required this.onCapacity,
-    required this.onLocation,
-    required this.onRemove,
-  });
-  final _SessionDraft draft;
-  final List<OrganizationLocation> locations;
-  final VoidCallback onPickTime;
-  final ValueChanged<int> onCapacity;
-  final ValueChanged<String?> onLocation;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        color: AppColors.inputBackground,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: onPickTime,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.schedule_rounded,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        draft.time.format(context),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 70,
-                child: TextField(
-                  controller: TextEditingController(text: '${draft.capacity}'),
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    labelText: 'Cupo',
-                    isDense: true,
-                  ),
-                  onChanged: (v) =>
-                      onCapacity(int.tryParse(v) ?? draft.capacity),
-                ),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: AppColors.textSecondary,
-                ),
-                onPressed: onRemove,
-              ),
-            ],
-          ),
-          if (locations.length > 1)
-            DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value:
-                    draft.locationId ??
-                    (locations.isNotEmpty ? locations.first.id : null),
-                isExpanded: true,
-                isDense: true,
-                items: [
-                  for (final l in locations)
-                    DropdownMenuItem(
-                      value: l.id,
-                      child: Text(l.name, style: const TextStyle(fontSize: 12)),
-                    ),
-                ],
-                onChanged: onLocation,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}

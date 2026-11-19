@@ -96,13 +96,17 @@ class _MeasurementsScreenState extends ConsumerState<MeasurementsScreen> {
         return da.compareTo(db);
       });
 
+    // Most recent value recorded for each measure (rows are newest-first).
+    final latest = _latestValues(rows);
+    final lastDate = _measuredAt(rows.first);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () => _openForm(context),
+            onPressed: () => _openForm(context, initialValues: latest),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
@@ -116,6 +120,8 @@ class _MeasurementsScreenState extends ConsumerState<MeasurementsScreen> {
                     fontSize: 14.5, fontWeight: FontWeight.w600)),
           ),
         ),
+        const SizedBox(height: 20),
+        _CurrentFigureCard(values: latest, lastDate: lastDate),
         const SizedBox(height: 24),
         _sectionLabel('Progreso'),
         const SizedBox(height: 10),
@@ -144,7 +150,27 @@ class _MeasurementsScreenState extends ConsumerState<MeasurementsScreen> {
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary));
 
-  Future<void> _openForm(BuildContext context) async {
+  /// The most recent non-null value for each measure across all history
+  /// ([rows] is newest-first). Used to show the current figure and to
+  /// pre-fill the editor so a new measurement carries the last data forward.
+  Map<String, double?> _latestValues(List<Map<String, dynamic>> rows) {
+    final out = {for (final m in _measures) m.key: null as double?};
+    for (final m in _measures) {
+      for (final row in rows) {
+        final v = _asDouble(row[m.key]);
+        if (v != null) {
+          out[m.key] = v;
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
+  Future<void> _openForm(
+    BuildContext context, {
+    Map<String, double?>? initialValues,
+  }) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -152,7 +178,7 @@ class _MeasurementsScreenState extends ConsumerState<MeasurementsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (_) => const _FigureEditor(),
+      builder: (_) => _FigureEditor(initialValues: initialValues),
     );
     if (saved == true) {
       ref.invalidate(measurementsProvider);
@@ -646,6 +672,52 @@ class _HistoryTile extends StatelessWidget {
   }
 }
 
+/// Read-only body figure on the main screen showing the latest recorded
+/// measurements graphically, mirroring the registration figure.
+class _CurrentFigureCard extends StatelessWidget {
+  const _CurrentFigureCard({required this.values, required this.lastDate});
+  final Map<String, double?> values;
+  final DateTime? lastDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.accessibility_new_rounded,
+                  size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Tus medidas actuales',
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
+              ),
+              if (lastDate != null)
+                Text(DateFormat('d MMM y', 'es').format(lastDate!),
+                    style: GoogleFonts.inter(
+                        fontSize: 11.5, color: AppColors.textSecondary)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // Read-only figure (onTap null = not editable here).
+          BodyFigureInput(values: values, onTap: null, height: 380),
+        ],
+      ),
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onRegister});
   final VoidCallback onRegister;
@@ -733,19 +805,25 @@ class _ErrorState extends StatelessWidget {
 
 /// Bottom-sheet editor: tap the body figure to enter each measure.
 class _FigureEditor extends ConsumerStatefulWidget {
-  const _FigureEditor();
+  const _FigureEditor({this.initialValues});
+
+  /// Pre-filled values carried forward from the last record (null for first).
+  final Map<String, double?>? initialValues;
 
   @override
   ConsumerState<_FigureEditor> createState() => _FigureEditorState();
 }
 
 class _FigureEditorState extends ConsumerState<_FigureEditor> {
-  final Map<String, double?> _values = {
-    for (final m in _measures) m.key: null,
+  late final Map<String, double?> _values = {
+    for (final m in _measures) m.key: widget.initialValues?[m.key],
   };
   final _noteController = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
+
+  bool get _hasPrefill =>
+      widget.initialValues?.values.any((v) => v != null) ?? false;
 
   @override
   void dispose() {
@@ -838,7 +916,10 @@ class _FigureEditorState extends ConsumerState<_FigureEditor> {
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary)),
               const SizedBox(height: 4),
-              Text('Toca cada punto del cuerpo para ingresar su medida.',
+              Text(
+                  _hasPrefill
+                      ? 'Se cargaron tus últimas medidas. Actualiza solo las que cambiaron.'
+                      : 'Toca cada punto del cuerpo para ingresar su medida.',
                   style:
                       TextStyle(fontSize: 13, color: AppColors.textSecondary)),
               const SizedBox(height: 14),
