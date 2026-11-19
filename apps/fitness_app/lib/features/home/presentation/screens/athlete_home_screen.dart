@@ -62,6 +62,10 @@ class AthleteHomeScreen extends ConsumerWidget {
                   const _NextClassSection(),
                 const SizedBox(height: 26),
                 _MenuGrid(key: ValueKey(AppColors.isDark)),
+                if (!gated) ...[
+                  const SizedBox(height: 22),
+                  const _OtherClassesSection(),
+                ],
                 const SizedBox(height: 22),
                 const _ActivitySummarySection(),
               ],
@@ -296,38 +300,146 @@ class _NextClassSection extends ConsumerWidget {
       ),
       data: (rows) {
         if (rows.isEmpty) return const _EmptyClassCard();
+        // Only the soonest class shows the prominent card here; the rest live in
+        // the "Otras clases disponibles" section below the menu.
+        return _NextClassCard(row: rows.first);
+      },
+    );
+  }
+}
+
+/// "Otras clases disponibles" — placed after the menu. Shows the remaining
+/// classes of TODAY directly, and the ones on later days inside a collapsible
+/// list. Renders nothing when there are no other classes.
+class _OtherClassesSection extends ConsumerStatefulWidget {
+  const _OtherClassesSection();
+
+  @override
+  ConsumerState<_OtherClassesSection> createState() =>
+      _OtherClassesSectionState();
+}
+
+class _OtherClassesSectionState extends ConsumerState<_OtherClassesSection> {
+  bool _expanded = false;
+
+  bool _isToday(Map<String, dynamic> row) {
+    final st = DateTime.tryParse(row['start_time'] as String? ?? '')?.toLocal();
+    if (st == null) return false;
+    final now = DateTime.now();
+    return st.year == now.year && st.month == now.month && st.day == now.day;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(upcomingClassesProvider);
+    return async.maybeWhen(
+      data: (rows) {
+        // Exclude the first (prominent) class; it's shown above the menu.
         final others = rows.skip(1).toList();
+        if (others.isEmpty) return const SizedBox.shrink();
+        final today = others.where(_isToday).toList();
+        final later = others.where((r) => !_isToday(r)).toList();
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // The soonest class keeps the prominent card (with Ver clase + Iniciar).
-            _NextClassCard(row: rows.first),
-            if (others.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Icon(Icons.event_note_rounded,
-                      size: 16, color: AppColors.textSecondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Otras clases disponibles',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                    ),
+            Row(
+              children: [
+                Icon(Icons.event_note_rounded,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Otras clases disponibles',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              for (final r in others) ...[
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (today.isEmpty)
+              Text(
+                'No hay más clases hoy.',
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: AppColors.textSecondary),
+              )
+            else
+              for (final r in today) ...[
                 _OtherClassCard(row: r),
                 const SizedBox(height: 8),
+              ],
+            if (later.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _ExpandHeader(
+                label: 'Próximos días',
+                count: later.length,
+                expanded: _expanded,
+                onTap: () => setState(() => _expanded = !_expanded),
+              ),
+              if (_expanded) ...[
+                const SizedBox(height: 8),
+                for (final r in later) ...[
+                  _OtherClassCard(row: r),
+                  const SizedBox(height: 8),
+                ],
               ],
             ],
           ],
         );
       },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+/// A tappable header that expands / collapses the later-days class list.
+class _ExpandHeader extends StatelessWidget {
+  const _ExpandHeader({
+    required this.label,
+    required this.count,
+    required this.expanded,
+    required this.onTap,
+  });
+  final String label;
+  final int count;
+  final bool expanded;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$label ($count)',
+                style: GoogleFonts.inter(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            AnimatedRotation(
+              turns: expanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: Icon(Icons.expand_more_rounded,
+                  size: 22, color: AppColors.primary),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
