@@ -520,6 +520,13 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
             ),
           ),
         ),
+        if (_programId != null)
+          IconButton(
+            tooltip: 'Ver inscritos',
+            icon: Icon(Icons.groups_rounded, color: AppColors.primary),
+            onPressed: () =>
+                context.push('/admin/programming/$_programId/roster'),
+          ),
         ProgramStatusBadge(status: _status),
       ],
     );

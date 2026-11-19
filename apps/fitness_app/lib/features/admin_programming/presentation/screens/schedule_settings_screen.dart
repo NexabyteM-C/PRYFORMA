@@ -59,12 +59,17 @@ class _ScheduleBody extends ConsumerWidget {
           ],
         ),
         data: (slots) {
+          int startOf(Map<String, dynamic> s) =>
+              (s['start_minutes'] as num?)?.toInt() ?? 0;
+          // Earliest slot on top, latest at the bottom, within each period.
           final am = slots
               .where((s) => (s['period'] as String?) == 'AM')
-              .toList();
+              .toList()
+            ..sort((a, b) => startOf(a).compareTo(startOf(b)));
           final pm = slots
               .where((s) => (s['period'] as String?) != 'AM')
-              .toList();
+              .toList()
+            ..sort((a, b) => startOf(a).compareTo(startOf(b)));
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 96),

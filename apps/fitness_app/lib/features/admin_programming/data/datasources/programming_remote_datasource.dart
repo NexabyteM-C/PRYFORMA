@@ -85,11 +85,22 @@ class ProgrammingRemoteDatasource {
 
   // ---- Box time slots (reusable weekly schedule the box configures) ----
   Future<List<Map<String, dynamic>>> listTimeSlots(String orgId) async {
-    return await _supabase
+    final rows = await _supabase
         .from('box_time_slots')
         .select('*')
         .eq('organization_id', orgId)
         .order('start_minutes');
+    // Older/seeded rows can have a null (or 0) start_minutes while still
+    // carrying a human label like "7:00 - 8:00 AM". Normalize every row so the
+    // minutes are always present and correct — this is what powers the schedule
+    // ordering AND session generation (createSessionsFromSlots /
+    // syncSessionsFromSlots skip slots with a null start_minutes).
+    final normalized = List<Map<String, dynamic>>.from(rows)
+        .map(normalizeTimeSlot)
+        .toList()
+      ..sort((a, b) => ((a['start_minutes'] as num?) ?? 0)
+          .compareTo((b['start_minutes'] as num?) ?? 0));
+    return normalized;
   }
 
   Future<Map<String, dynamic>> createTimeSlot(String orgId, Map<String, dynamic> body) async {
@@ -355,4 +366,60 @@ class ProgrammingRemoteDatasource {
           .eq('id', programId);
     }
   }
+}
+
+/// Returns a copy of a `box_time_slots` row with `start_minutes`,
+/// `end_minutes` and `period` guaranteed present and consistent.
+///
+/// When those integer fields are missing (null) or clearly unset (0), they are
+/// re-derived by parsing the row's `label` (e.g. "7:00 - 8:00 AM"). Rows that
+/// already carry valid minutes are returned unchanged.
+Map<String, dynamic> normalizeTimeSlot(Map<String, dynamic> slot) {
+  final rawStart = (slot['start_minutes'] as num?)?.toInt();
+  final rawEnd = (slot['end_minutes'] as num?)?.toInt();
+  final hasStart = rawStart != null && rawStart > 0;
+  if (hasStart) {
+    // Start is valid; backfill a sane end and always derive the period from the
+    // start so the AM/PM grouping can never disagree with the time.
+    return {
+      ...slot,
+      'end_minutes': (rawEnd != null && rawEnd > rawStart)
+          ? rawEnd
+          : rawStart + 60,
+      'period': rawStart < 720 ? 'AM' : 'PM',
+    };
+  }
+  final parsed = _parseSlotLabelMinutes(slot['label'] as String?);
+  if (parsed == null) return slot;
+  final (start, end) = parsed;
+  return {
+    ...slot,
+    'start_minutes': start,
+    'end_minutes': end,
+    'period': start < 720 ? 'AM' : 'PM',
+  };
+}
+
+final RegExp _slotLabelRe = RegExp(
+  r'(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)',
+  caseSensitive: false,
+);
+
+/// Parses a "h:mm - h:mm AM/PM" label into (startMinutes, endMinutes) from
+/// midnight, or null when it doesn't match.
+(int, int)? _parseSlotLabelMinutes(String? label) {
+  if (label == null) return null;
+  final m = _slotLabelRe.firstMatch(label);
+  if (m == null) return null;
+  final pm = m.group(5)!.toUpperCase() == 'PM';
+  int toMinutes(int hour12, int minute) {
+    var h = hour12 % 12; // 12 -> 0
+    if (pm) h += 12; // PM -> +12 (noon = 12:00)
+    return h * 60 + minute;
+  }
+
+  final start = toMinutes(int.parse(m.group(1)!), int.parse(m.group(2)!));
+  var end = toMinutes(int.parse(m.group(3)!), int.parse(m.group(4)!));
+  if (end <= start) end += 720; // crosses the AM/PM boundary (e.g. 11-12)
+  return (start, end);
 }

@@ -8,6 +8,7 @@ import '../../features/admin_athletes/presentation/screens/athletes_list_screen.
 import '../../features/admin_members/presentation/screens/admin_results_screen.dart';
 import '../../features/admin_members/presentation/screens/members_hub_screen.dart';
 import '../../features/admin_programming/presentation/screens/program_editor_screen.dart';
+import '../../features/admin_programming/presentation/screens/program_enrollments_screen.dart';
 import '../../features/admin_programming/presentation/screens/programming_calendar_screen.dart';
 import '../../features/admin_programming/presentation/screens/template_library_screen.dart';
 import '../../features/admin_programming/presentation/screens/schedule_settings_screen.dart';
@@ -207,7 +208,16 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(path: 'new', builder: (context, state) => const ProgramEditorScreen()),
               GoRoute(path: 'templates', builder: (context, state) => const TemplateLibraryScreen()),
-              GoRoute(path: ':programId', builder: (context, state) => ProgramEditorScreen(programId: state.pathParameters['programId'])),
+              GoRoute(
+                path: ':programId',
+                builder: (context, state) => ProgramEditorScreen(programId: state.pathParameters['programId']),
+                routes: [
+                  GoRoute(
+                    path: 'roster',
+                    builder: (context, state) => ProgramEnrollmentsScreen(programId: state.pathParameters['programId']!),
+                  ),
+                ],
+              ),
             ],
           ),
           GoRoute(path: '/admin/athletes', builder: (context, state) => const AthletesListScreen()),

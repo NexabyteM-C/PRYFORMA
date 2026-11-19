@@ -48,6 +48,8 @@ class AccountingReport {
     required this.incomeByPlan,
     required this.sociosByPlan,
     required this.totalPayments,
+    required this.comparisonYear,
+    required this.comparisonIncome,
   });
 
   final List<MonthBucket> months; // 12 buckets of the selected year
@@ -58,6 +60,8 @@ class AccountingReport {
   final Map<String, double> incomeByPlan; // plan name -> income (selected year)
   final Map<String, int> sociosByPlan; // plan name -> active socios
   final int totalPayments; // # of payments in the selected year (after filters)
+  final int comparisonYear; // previous year, for the "comparar" chart mode
+  final List<double> comparisonIncome; // 12 monthly incomes of comparisonYear
 }
 
 /// Computes the accounting report for the selected year honoring the plan and
@@ -81,7 +85,9 @@ final accountingReportProvider = FutureProvider<AccountingReport>((ref) async {
   }
 
   final now = DateTime.now();
+  final comparisonYear = year - 1;
   final months = [for (var i = 1; i <= 12; i++) MonthBucket(year, i)];
+  final comparisonIncome = List<double>.filled(12, 0);
   double yearIncome = 0;
   double monthIncome = 0;
   final incomeByPlan = <String, double>{};
@@ -99,6 +105,9 @@ final accountingReportProvider = FutureProvider<AccountingReport>((ref) async {
     if (paid == null) continue;
     final amount = (p['amount_cop'] as num?)?.toDouble() ?? 0;
 
+    if (paid.year == comparisonYear) {
+      comparisonIncome[paid.month - 1] += amount;
+    }
     if (paid.year == year) {
       months[paid.month - 1].income += amount;
       months[paid.month - 1].payments += 1;
@@ -157,5 +166,7 @@ final accountingReportProvider = FutureProvider<AccountingReport>((ref) async {
     incomeByPlan: incomeByPlan,
     sociosByPlan: sociosByPlan,
     totalPayments: totalPayments,
+    comparisonYear: comparisonYear,
+    comparisonIncome: comparisonIncome,
   );
 });

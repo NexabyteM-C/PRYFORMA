@@ -284,7 +284,14 @@ class _ProgrammingCalendarScreenState
                   ),
                 ),
                 ProgramStatusBadge(status: p.status),
-                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Ver inscritos',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.groups_rounded,
+                      size: 20, color: AppColors.primary),
+                  onPressed: () =>
+                      context.push('/admin/programming/${p.id}/roster'),
+                ),
                 Icon(
                   Icons.chevron_right_rounded,
                   color: AppColors.textSecondary,

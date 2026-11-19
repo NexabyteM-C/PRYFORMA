@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../providers/accounting_providers.dart';
 import '../providers/members_providers.dart';
+import '../widgets/income_chart.dart';
 
 final _copFmt = NumberFormat.decimalPattern('es_CO');
 String _cop(num v) => '\$${_copFmt.format(v.round())}';
@@ -208,8 +209,6 @@ class AdminResultsScreen extends ConsumerWidget {
   }
 
   Widget _report(BuildContext context, WidgetRef ref, AccountingReport r) {
-    final maxIncome = r.months.fold<double>(
-        0, (m, b) => b.income > m ? b.income : m);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -231,7 +230,13 @@ class AdminResultsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         _sectionTitle('Ingresos por mes'),
         const SizedBox(height: 12),
-        _monthlyChart(r, maxIncome),
+        IncomeChart(
+          current: [for (final b in r.months) b.income],
+          comparisonIncome: r.comparisonIncome,
+          year: r.months.isNotEmpty ? r.months.first.year : DateTime.now().year,
+          comparisonYear: r.comparisonYear,
+          monthLabels: _monthShort,
+        ),
         const SizedBox(height: 24),
         _sectionTitle('Detalle mensual'),
         const SizedBox(height: 10),
@@ -274,57 +279,6 @@ class AdminResultsScreen extends ConsumerWidget {
               style: GoogleFonts.inter(
                   fontSize: 12, color: AppColors.textSecondary)),
         ],
-      ),
-    );
-  }
-
-  Widget _monthlyChart(AccountingReport r, double maxIncome) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: SizedBox(
-        height: 160,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (final b in r.months)
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      b.income > 0
-                          ? _copFmt.format((b.income / 1000).round())
-                          : '',
-                      style: GoogleFonts.inter(
-                          fontSize: 8.5, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 2),
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      height: maxIncome <= 0
-                          ? 2
-                          : (6 + 108 * (b.income / maxIncome)),
-                      decoration: BoxDecoration(
-                        color: b.income > 0
-                            ? AppColors.primary
-                            : AppColors.border,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(_monthShort[b.month - 1],
-                        style: GoogleFonts.inter(
-                            fontSize: 9.5, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

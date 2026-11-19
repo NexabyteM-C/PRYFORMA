@@ -10,6 +10,15 @@ final programSessionsProvider =
   return ds.sessionsForProgram(programId);
 });
 
+/// Roster of a session (athletes currently enrolled, with their profile) —
+/// used by the admin/coach "Inscritos" view. autoDispose so the list refetches
+/// each time the screen is opened.
+final sessionRosterProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, sessionId) async {
+  final ds = ref.watch(classRemoteDatasourceProvider);
+  return ds.sessionRoster(sessionId);
+});
+
 /// The current athlete's enrollment row for a single session, or null.
 final myEnrollmentProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, sessionId) async {
